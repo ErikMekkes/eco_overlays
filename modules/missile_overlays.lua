@@ -125,7 +125,7 @@ function createBuildtimeOverlay(data)
 		end
 	end
 
-	overlay.eta = UIUtil.CreateText(overlay, '?:??', 10, UIUtil.titleFont, true)
+	overlay.eta = UIUtil.CreateText(overlay, '?:??', 10, UIUtil.fixedFont, true)
     overlay.eta:DisableHitTest()
 	overlay.eta:SetColor('white')
 	LayoutHelpers.AtCenterIn(overlay.eta, overlay, -11, 0)
