@@ -52,6 +52,7 @@ function CreateMexOverlay(unit)
     -- create overlay, hit test disabled = can click through
 	local overlay = Bitmap(GetFrame(0))
     overlay:DisableHitTest()
+    local overlay_id = unit:GetEntityId()
     -- background color and size of overlay
 	overlay:SetSolidColor('black')
 	overlay.Width:Set(10)
@@ -67,7 +68,7 @@ function CreateMexOverlay(unit)
 		else
             -- destroy overlay immediately if unit died
             overlay:Destroy()
-            overlays[unit:GetEntityId()] = nil
+            overlays[overlay_id] = nil
 		end
 	end
 
