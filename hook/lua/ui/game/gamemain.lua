@@ -3,10 +3,10 @@
 local modPath = '/mods/eco_overlays/'
 
 local originalCreateUI = CreateUI
-function CreateUI(isReplay, parent)
+function CreateUI(isReplay)
     -- preserve original ui functionality
     originalCreateUI(isReplay)
 
     -- import and run our own
-    import(modPath .. "modules/init.lua").init(isReplay, import('/lua/ui/game/borders.lua').GetMapGroup())
+    import(modPath .. "modules/init.lua").init(isReplay)
 end

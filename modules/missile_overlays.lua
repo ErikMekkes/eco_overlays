@@ -109,6 +109,7 @@ end
 function createBuildtimeOverlay(data)
 	local overlay = Bitmap(GetFrame(0))
     overlay:DisableHitTest()
+    local overlay_id = data.unit:GetEntityId()
 
 	overlay.Width:Set(12)
 	overlay.Height:Set(12)
@@ -121,7 +122,7 @@ function createBuildtimeOverlay(data)
 		else
             -- destroy overlay immediately if unit died
             overlay:Destroy()
-            overlays[data.unit:GetEntityId()] = nil
+            overlays[overlay_id] = nil
 		end
 	end
 
@@ -137,10 +138,10 @@ function createBuildtimeOverlay(data)
 
     overlay.silo = Bitmap(overlay)
     overlay.silo:DisableHitTest()
+	-- this order because sera bship launchers have tmd, no smds have tmd.
 	if isNukeLauncher(data.unit) then
     	overlay.silo:SetSolidColor('CCA943')
-	end
-	if isNukeDefence(data.unit) then
+	elseif isNukeDefence(data.unit) then
     	overlay.silo:SetSolidColor('A9C974')
 	end
 	overlay.silo.Width:Set(12)
@@ -179,26 +180,26 @@ function updateBuildtimeOverlay(data)
 
 	-- decide if eta timer should be shown and update the text
 	if data.eta >= 0 then
-		bitmap.eta:SetText(formatBuildtime(math.max(0, data.eta-GetGameTimeSeconds())))
 		bitmap.eta:Show()
+		bitmap.eta:SetText(formatBuildtime(math.max(0, data.eta-GetGameTimeSeconds())))
 	else
 		bitmap.eta:Hide()
 	end
 	-- decide if progress should be shown and update the text
 	if data.progress >= 0 then
-		bitmap.progress:SetText(math.floor(data.progress*100) .. "%")
 		bitmap.progress:Show()
+		bitmap.progress:SetText(math.floor(data.progress*100) .. "%")
 	else
 		bitmap.progress:Hide()
 	end
-
+	-- decide if missile count should be shown and update the text
 	if data.silo >= 0 then
-		bitmap.silo.text:SetText(data.silo)
 		bitmap.silo:Show()
+		bitmap.silo.text:SetText(data.silo)
 	else
 		bitmap.silo:Hide()
 	end
-
+	-- update progress text color to show efficiency
 	if data.eff >= 0 then
 		local color = effColor(data.eff)
 		bitmap.progress:SetColor(color)
@@ -208,6 +209,17 @@ end
 
 function calcEff(data)
 	return math.min(1, math.min(data.mc / data.mr, data.ec / data.er))
+end
+
+-- removes overlays that no longer exist by checking against constructions.
+function clearDeadOverlays(constructions)
+	for id, o in overlays do
+		-- still an overlay, no longer a construction.
+		if not constructions[id] then
+			o['bitmap']:Destroy()
+			overlays[id] = nil
+		end
+	end
 end
 
 -- removes all overlays from memory
@@ -284,16 +296,19 @@ function checkConstructions()
 		end
 
 		local data = {id=u:GetEntityId(), unit=u, pos=u:GetPosition(), eta=eta, progress=progress, silo=silo, eff=eff}
-
 		updateBuildtimeOverlay(data)
 	end
+
+	-- clear overlays that no longer exist.
+	clearDeadOverlays(constructions)
 end
 
-function init(isReplay, parent)
+function init(isReplay)
 	addListener(checkConstructions, missile_overlay_interval)
 end
 
 -- antinuke
+-- antimissile = strategic but also tactical defence
 -- BuildCostEnergy = 360000,
 -- BuildCostMass = 3600,
 -- BuildTime = 259200,

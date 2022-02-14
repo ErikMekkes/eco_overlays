@@ -3,6 +3,8 @@ local Units = import('/mods/common/units.lua')
 local LayoutHelpers = import('/lua/maui/layouthelpers.lua')
 local UIUtil = import('/lua/ui/uiutil.lua')
 local Bitmap = import('/lua/maui/bitmap.lua').Bitmap
+-- could use UI Group to store overlays as group, but probably works out
+-- the same performance wise, not that useful for rendering / removal.
 
 local modPath = '/mods/eco_overlays/'
 local addListener = import(modPath .. 'modules/init.lua').addListener
@@ -11,7 +13,6 @@ local addListener = import(modPath .. 'modules/init.lua').addListener
 local mex_overlay_interval = 1
 local overlays = {}
 local was_enabled = true
-
 
 function getMexes()
 	return Units.Get(categories.MASSEXTRACTION * categories.STRUCTURE)
@@ -48,12 +49,13 @@ function isMexBeingBuilt(mex)
 	return true
 end
 
-function CreateMexOverlay(unit)
+function CreateMexOverlay(unit, id)
     -- create overlay, hit test disabled = can click through
+    -- this can bug warn when observing & switching players. 
+    -- somehow its position isnt initialized even though its the ui base component? 
+    -- it enters a circular dependency due to not having a position.
 	local overlay = Bitmap(GetFrame(0))
     overlay:DisableHitTest()
-    local overlay_id = unit:GetEntityId()
-    -- background color and size of overlay
 	overlay:SetSolidColor('black')
 	overlay.Width:Set(10)
 	overlay.Height:Set(10)
@@ -61,14 +63,14 @@ function CreateMexOverlay(unit)
     -- specify how the overlay should be re-drawn for each new frame
 	overlay.OnFrame = function(self, delta)
 		if not unit:IsDead() then
-			local worldView = import('/lua/ui/game/worldview.lua').viewLeft
+            local worldView = import('/lua/ui/game/worldview.lua').viewLeft
 			local pos = worldView:Project(unit:GetPosition())
             -- scale and reposition to match new camera position
 			LayoutHelpers.AtLeftTopIn(overlay, worldView, pos.x - overlay.Width() / 2, pos.y - overlay.Height() / 2 + 1)
 		else
             -- destroy overlay immediately if unit died
             overlay:Destroy()
-            overlays[overlay_id] = nil
+            overlays[id] = nil
 		end
 	end
 
@@ -99,7 +101,7 @@ function hasStorages(mex)
     return true
 end
 
-function UpdateMexOverlay(mex)
+function UpdateMexOverlay(mex, id)
     -- important to make sure separate upgrade_target units from 
     -- upgrading mexes dont get their own overlapping overlays
     if isUpgradeTarget(mex) then
@@ -107,9 +109,8 @@ function UpdateMexOverlay(mex)
     end
 
     -- create overlay for mex if none exists
-	local id = mex:GetEntityId()
 	if not overlays[id] then
-		overlays[id] = CreateMexOverlay(mex)
+		overlays[id] = CreateMexOverlay(mex, id)
 	end
 	local overlay = overlays[id]
 
@@ -156,6 +157,17 @@ function UpdateMexOverlay(mex)
 	overlay.text:SetColor(color)
 end
 
+-- removes overlays that no longer exist by checking against mexes.
+function clearDeadOverlays(mex_ids)
+	for id, overlay in overlays do
+		-- still an overlay, no longer a mex.
+		if not mex_ids[id] then
+			overlay:Destroy()
+			overlays[id] = nil
+		end
+	end
+end
+
 -- removes all overlays from memory
 function clearAllOverlays()
     for id, overlay in overlays do
@@ -182,15 +194,21 @@ function mexOverlay()
 
     -- refresh overlays
 	local mexes = getMexes()
+    local mex_ids = {}
     for _, m in mexes do
+        id = m:GetEntityId()
         -- TODO: could try and only do this when state changed for efficiency
-        UpdateMexOverlay(m)
+        UpdateMexOverlay(m, id)
+        mex_ids[id] = id
     end
+
+	-- clear overlays that no longer exist.
+	clearDeadOverlays(mex_ids)
 end
 
 -- called from modules/init.lua.setup(isReplay, parent)
 -- could use isReplay for replay only / non replay functionality
-function init(isReplay, parent)
+function init(isReplay)
     -- register callback in main execution loop
 	addListener(mexOverlay, mex_overlay_interval)
 end

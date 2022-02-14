@@ -58,18 +58,18 @@ function watchdogThread()
 end
 
 -- loads functions+attributes from possible modules into local memory
-function setup(isReplay, parent)
+function setup(isReplay)
 	-- call init function from each module, init might do nothing if isReplay
 	for _, m in mods do
 		LOG('Loading Overlay: ' .. m)
-		import(modPath .. 'modules/' .. m .. '.lua').init(isReplay, parent)
+		import(modPath .. 'modules/' .. m .. '.lua').init(isReplay)
 	end
 end
 
 -- main entry point from ui/game/gamemain.lua.CreateUI()
-function init(isReplay, parent)
+function init(isReplay)
 	-- load modules
-	setup(isReplay, parent)
+	setup(isReplay)
 
 	-- start main thread for periodic checking
 	ForkThread(mainThread)
