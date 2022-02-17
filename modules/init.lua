@@ -13,7 +13,7 @@ local listeners = {}
 
 local mThread = nil
 
-function currentTick()
+local function currentTick()
 	return current_tick
 end
 
@@ -22,7 +22,7 @@ function addListener(callback, wait)
 end
 
 -- main loop
-function mainThread()
+local function mainThread()
 	local options
 
 	while true do
@@ -40,7 +40,7 @@ function mainThread()
 end
 
 -- watchdog timer for main event loop, kills and restarts it if timer elapses
-function watchdogThread()
+local function watchdogThread()
 	while true do
 		-- still on same tick = no iterations of main loop did finish
 		if watch_tick == current_tick then
@@ -58,10 +58,10 @@ function watchdogThread()
 end
 
 -- loads functions+attributes from possible modules into local memory
-function setup(isReplay)
+local function setup(isReplay)
 	-- call init function from each module, init might do nothing if isReplay
 	for _, m in mods do
-		LOG('Loading Overlay: ' .. m)
+		LOG('Loading module: ' .. m)
 		import(modPath .. 'modules/' .. m .. '.lua').init(isReplay)
 	end
 end

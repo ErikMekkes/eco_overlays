@@ -1,10 +1,17 @@
-local Prefs = import('/lua/user/prefs.lua')
-local Units = import('/mods/common/units.lua')
+local GetOption = import('/lua/user/prefs.lua').GetOption
+local GetUnits = import('/mods/common/units.lua').Get
 local LayoutHelpers = import('/lua/maui/layouthelpers.lua')
+local AtLeftTopIn = LayoutHelpers.AtLeftTopIn
+local AtCenterIn = LayoutHelpers.AtCenterIn
 local UIUtil = import('/lua/ui/uiutil.lua')
+local CreateText = UIUtil.CreateText
+local bodyFont = UIUtil.bodyFont
 local Bitmap = import('/lua/maui/bitmap.lua').Bitmap
 -- could use UI Group to store overlays as group, but probably works out
 -- the same performance wise, not that useful for rendering / removal.
+
+local worldView = import('/lua/ui/game/worldview.lua')
+local viewLeft = worldView.viewLeft
 
 local modPath = '/mods/eco_overlays/'
 local addListener = import(modPath .. 'modules/init.lua').addListener
@@ -14,12 +21,12 @@ local mex_overlay_interval = 1
 local overlays = {}
 local was_enabled = true
 
-function getMexes()
-	return Units.Get(categories.MASSEXTRACTION * categories.STRUCTURE)
+local function getMexes()
+	return GetUnits(categories.MASSEXTRACTION * categories.STRUCTURE)
 end
 
 -- returns true iff mex is an upgrade_target unit, not the original mex.
-function isUpgradeTarget(mex)
+local function isUpgradeTarget(mex)
     if mex.upgradingFrom then
         return true
     else
@@ -28,7 +35,7 @@ function isUpgradeTarget(mex)
 end
 
 -- returns true iff mex is upgrading (paused or not)
-function isUpgrading(mex)
+local function isUpgrading(mex)
     if mex.upgradingTo then
         return true
     else
@@ -37,19 +44,16 @@ function isUpgrading(mex)
 end
 
 -- returns true iff mex is under construction
-function isMexBeingBuilt(mex)
-	if mex:GetEconData().energyRequested ~= 0 then
-		return false
-	end
+local function isMexBeingBuilt(mex)
+	if mex:GetEconData().energyRequested ~= 0 then return false end
 
-	if mex:GetHealth() == mex:GetMaxHealth() then
-		return false
-	end
+	if mex:GetHealth() == mex:GetMaxHealth() then return false end
+    if mex.IsPaused then return false end -- func doesnt exist if unfinished
     -- might not be 100% fault proof, but combined with other checks its fine
 	return true
 end
 
-function CreateMexOverlay(unit, id)
+local function CreateMexOverlay(unit, id)
     -- create overlay, hit test disabled = can click through
     -- this can bug warn when observing & switching players. 
     -- somehow its position isnt initialized even though its the ui base component? 
@@ -62,24 +66,24 @@ function CreateMexOverlay(unit, id)
 	
     -- specify how the overlay should be re-drawn for each new frame
 	overlay.OnFrame = function(self, delta)
-		if not unit:IsDead() then
-            local worldView = import('/lua/ui/game/worldview.lua').viewLeft
-			local pos = worldView:Project(unit:GetPosition())
-            -- scale and reposition to match new camera position
-			LayoutHelpers.AtLeftTopIn(overlay, worldView, pos.x - overlay.Width() / 2, pos.y - overlay.Height() / 2 + 1)
-		else
+		if unit:IsDead() then
             -- destroy overlay immediately if unit died
             overlay:Destroy()
             overlays[id] = nil
+		else
+            viewLeft = worldView.viewLeft
+            local pos = viewLeft:Project(unit:GetPosition())
+            -- scale and reposition to match new camera position
+            AtLeftTopIn(overlay, viewLeft, pos.x - overlay.Width() / 2, pos.y - overlay.Height() / 2 + 1)
 		end
 	end
 
     --
-	overlay.text = UIUtil.CreateText(overlay, '0', 11, UIUtil.bodyFont)
+	overlay.text = CreateText(overlay, '0', 11, bodyFont)
     overlay.text:DisableHitTest()
 	overlay.text:SetColor('green')
     overlay.text:SetDropShadow(true)
-	LayoutHelpers.AtCenterIn(overlay.text, overlay, 0, 0)
+	AtCenterIn(overlay.text, overlay, 0, 0)
 
     -- register the overlay through its parent control class for frame updates
 	overlay:SetNeedsFrameUpdate(true)
@@ -89,7 +93,7 @@ end
 
 -- returns true if mex is surrounded by 4 storages (1.5 boost)
 -- fun side effect: also true if power stalled -> turns red
-function hasStorages(mex)
+local function hasStorages(mex)
     local blueprint = mex:GetBlueprint()
     local default_mass_production = blueprint.Economy.ProductionPerSecondMass
     local current_mass_production = mex:GetEconData().massProduced
@@ -101,7 +105,7 @@ function hasStorages(mex)
     return true
 end
 
-function UpdateMexOverlay(mex, id)
+local function UpdateMexOverlay(mex, id)
     -- important to make sure separate upgrade_target units from 
     -- upgrading mexes dont get their own overlapping overlays
     if isUpgradeTarget(mex) then
@@ -131,6 +135,7 @@ function UpdateMexOverlay(mex, id)
     -- red = inefficient mex, need to take action
     -- white = maximized t3 efficiency, no longer needs attention
     
+    --TODO one rare case left of switching observers, upgrading mex has 2 overlays / colors
 	local color = 'green'
     if isMexBeingBuilt(mex) then
         color = 'steelblue'
@@ -158,7 +163,7 @@ function UpdateMexOverlay(mex, id)
 end
 
 -- removes overlays that no longer exist by checking against mexes.
-function clearDeadOverlays(mex_ids)
+local function clearDeadOverlays(mex_ids)
 	for id, overlay in overlays do
 		-- still an overlay, no longer a mex.
 		if not mex_ids[id] then
@@ -169,7 +174,7 @@ function clearDeadOverlays(mex_ids)
 end
 
 -- removes all overlays from memory
-function clearAllOverlays()
+local function clearAllOverlays()
     for id, overlay in overlays do
         -- make sure overlay is gone and can be garbage collected
         overlay:Destroy()
@@ -177,19 +182,19 @@ function clearAllOverlays()
     end
 end
 
-function mexOverlay()
+local function mexOverlay()
     -- do nothing if mex overlay got disabled in options
-    if not Prefs.GetOption('mexoverlays') then
+    if GetOption('mexoverlays') then
+        if was_enabled == false then
+            was_enabled = true
+        end
+    else
         -- but check if all created overlays were removed first
         if was_enabled == true then
             was_enabled = false
             clearAllOverlays()
         end
         return
-    else
-        if was_enabled == false then
-            was_enabled = true
-        end
     end
 
     -- refresh overlays
@@ -197,7 +202,6 @@ function mexOverlay()
     local mex_ids = {}
     for _, m in mexes do
         id = m:GetEntityId()
-        -- TODO: could try and only do this when state changed for efficiency
         UpdateMexOverlay(m, id)
         mex_ids[id] = id
     end
